@@ -1,0 +1,69 @@
+from neo4j import GraphDatabase
+
+class Neo4JConnector:
+    def __init__(self, uri, user, password):
+        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+    
+    def close(self):
+        self.driver.close()
+    
+    def ejecutar_consulta(self, query, parameters=None):
+        with self.driver.session() as session:
+            return session.run(query, parameters)
+
+def crear_persona(conexion, nombre, edad, genero):
+    query = """
+    CREATE (p:Persona {nombre: $nombre, edad: $edad, genero: $genero})
+    """
+    conexion.ejecutar_consulta(query, {"nombre": nombre, "edad": edad, "genero": genero})
+
+def crear_pelicula(conexion, titulo, duracion, año):
+    query = """
+    CREATE (m:Película {título: $titulo, duración: $duracion, año: $año})
+    """
+    conexion.ejecutar_consulta(query, {"titulo": titulo, "duracion": duracion, "año": año})
+
+def crear_genero(conexion, nombre_genero):
+    query = """
+    CREATE (g:Género {nombre: $nombre})
+    """
+    conexion.ejecutar_consulta(query, {"nombre": nombre_genero})
+
+def crear_amistad(conexion, nombre_persona1, nombre_persona2):
+    query = """
+    MATCH (p1:Persona {nombre: $nombre_persona1}), (p2:Persona {nombre: $nombre_persona2})
+    CREATE (p1)-[:AMIGO]->(p2)
+    """
+    conexion.ejecutar_consulta(query, {"nombre_persona1": nombre_persona1, "nombre_persona2": nombre_persona2})
+
+def vincular_pelicula_genero(conexion, titulo_pelicula, nombre_genero):
+    query = """
+    MATCH (m:Película {título: $titulo}), (g:Género {nombre: $genero})
+    CREATE (m)-[:PERTENECE_A]->(g)
+    """
+    conexion.ejecutar_consulta(query, {"titulo": titulo_pelicula, "genero": nombre_genero})
+
+def agregar_puntuacion(conexion, nombre_persona, titulo_pelicula, puntuacion):
+    query = """
+    MATCH (p:Persona {nombre: $nombre}), (m:Película {título: $titulo})
+    CREATE (p)-[:PUNTUACIÓN {valor: $valor}]->(m)
+    """
+    conexion.ejecutar_consulta(query, {"nombre": nombre_persona, "titulo": titulo_pelicula, "valor": puntuacion})
+
+def obtener_recomendaciones(conexion, usuario, genero, duracion_max):
+    query = """
+    MATCH (usuario:Persona {nombre: $usuario})-[:AMIGO]->(amigo)-[r:PUNTUACIÓN]->(m:Película)-[:PERTENECE_A]->(g:Género {nombre: $genero})
+    WHERE m.duración <= $duracion_max
+    RETURN m.título AS Película, m.duración AS Duración, AVG(r.valor) AS Puntuación, COLLECT(amigo.nombre) AS Recomendada_Por
+    ORDER BY Puntuación DESC
+    """
+    resultado = conexion.ejecutar_consulta(query, {"usuario": usuario, "genero": genero, "duracion_max": duracion_max})
+    return [dict(record) for record in resultado]
+
+# Configuración y uso básico
+if __name__ == "__main__":
+    # Configurar conexión
+    URI = "neo4j://localhost:7687"
+    USUARIO = "neo4j"
+    CONTRASEÑA = "tu_contraseña"
+    conn = Neo4JConnector(URI, USUARIO, CONTRASEÑA)
